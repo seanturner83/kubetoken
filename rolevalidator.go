@@ -23,13 +23,13 @@ type ADRoleValidater struct {
 }
 
 func (r *ADRoleValidater) ValidateRoleForUser(user, role string) error {
-	roledn := fmt.Sprintf("cn=%s,ou=access,ou=groups,%s", escapeDN(role), SearchBase)
-	filter := fmt.Sprintf("(&(objectCategory=Person)(sAMAccountName=*)(memberOf:1.2.840.113556.1.4.1941:=%s))", roledn)
+	roledn := fmt.Sprintf("cn=%s,%s", escapeDN(role), SearchBase)
+	filter := fmt.Sprintf("(&(objectClass=person)(memberOf=%s))", roledn)
 	kubeRoles := ldap.NewSearchRequest(
 		userdn(user),
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		filter,
-		[]string{"cn"},
+		[]string{"uid"},
 		nil,
 	)
 	conn, err := r.Bind()
@@ -44,15 +44,15 @@ func (r *ADRoleValidater) ValidateRoleForUser(user, role string) error {
 	}
 	switch len(sr.Entries) {
 	case 0:
-		return fmt.Errorf("%s is not a member of %s", userdn, roledn)
+		return fmt.Errorf("%s is not a member of %s", userdn(user), roledn)
 	case 1:
-		usercn := sr.Entries[0].GetAttributeValue("cn")
+		usercn := sr.Entries[0].GetAttributeValue("uid")
 		if user != usercn {
 			return fmt.Errorf("%q is not a member of %q; search returned %q", user, role, usercn)
 		}
 		return nil
 	default:
-		return fmt.Errorf("got %d entires for query %s: %s", len(sr.Entries), filter, sr.Entries)
+		return fmt.Errorf("got %d entries for query %s: %s", len(sr.Entries), filter, sr.Entries)
 	}
 
 }

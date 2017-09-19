@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+        "log"
 
 	ldap "gopkg.in/ldap.v2"
 )
@@ -20,9 +21,9 @@ func userdn(user string) string {
 
 func binddn(user string) string {
 	if strings.HasSuffix(user, "-bot") {
-		return "CN=%s,OU=bots,OU=people," + SearchBase
+		return "UID=%s,OU=bots," + BindDN
 	}
-	return "CN=%s,OU=people," + SearchBase
+	return "UID=%s," + BindDN
 }
 
 func (r *ADRoleProvider) FetchRolesForUser(user string) ([]string, error) {
@@ -37,9 +38,10 @@ func fetchRolesForUser(creds *LDAPCreds, userdn string) ([]string, error) {
 	defer conn.Close()
 
 	// find all the kube- roles
-	filter := fmt.Sprintf("(&(cn=kube-*-*-*-dl-*)(member:1.2.840.113556.1.4.1941:=%s))", userdn)
+	filter := fmt.Sprintf("(&(objectClass=groupOfNames)(member=%s))", userdn)
+        log.Println("here")
 	kubeRoles := ldap.NewSearchRequest(
-		"OU=access,OU=groups,"+SearchBase,
+		SearchBase,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		filter,
 		[]string{"cn"},
@@ -52,6 +54,7 @@ func fetchRolesForUser(creds *LDAPCreds, userdn string) ([]string, error) {
 
 	var roles []string
 	for _, e := range sr.Entries {
+                log.Println("roles", e)
 		role := e.GetAttributeValue("cn")
 		roles = append(roles, role)
 	}

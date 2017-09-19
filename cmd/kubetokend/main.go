@@ -25,6 +25,9 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// this value can be overwritten by -ldflags="-X main.BindDN=$BIND_DN"
+var BindDN = "OU=people,DC=office,DC=atlassian,DC=com"
+
 func main() {
 	fmt.Println(os.Args[0], "version:", kubetoken.Version)
 
@@ -98,9 +101,10 @@ func userdn(user string) string {
 
 func binddn(user string) string {
 	if strings.HasSuffix(user, "-bot") {
-		return "CN=%s,OU=bots,OU=people,DC=office,DC=atlassian,DC=com"
+		return "UID=%s,OU=bots," + BindDN
 	}
-	return "CN=%s,OU=people,DC=office,DC=atlassian,DC=com"
+        log.Println("BindDN", BindDN)
+	return "UID=%s," + BindDN
 }
 
 func BasicAuth(next http.Handler) http.Handler {

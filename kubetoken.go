@@ -6,3 +6,5 @@ var Version string = "unknown"
 
 // SearchBase is the LDAP search base.
 var SearchBase string = "DC=example,DC=com"
+
+var BindDN string = "OU=people,DC=office,DC=atlassian,DC=com"
