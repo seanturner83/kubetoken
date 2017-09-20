@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"crypto/x509"
+        "crypto/tls"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -16,10 +17,11 @@ import (
 	"os"
 	"regexp"
 	"sort"
-	"strings"
+//	"strings"
 
 	"github.com/atlassian/kubetoken"
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
+        ldap "gopkg.in/ldap.v2"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -43,6 +45,10 @@ func main() {
 		log.Fatalf("could not load config: %v", err)
 	}
 
+        ldapSearchAccount  := "uid=sean,ou=users,o=59ae7fcf7b2adf857732e47f,dc=jumpcloud,dc=com"
+        ldapSearchPassword := "G332EDP"
+
+
 	fmt.Println(os.Args[0], "loaded config: ")
 	b, err := json.MarshalIndent(config, "", "  ")
 	check(err)
@@ -54,8 +60,11 @@ func main() {
 
 	r := mux.NewRouter()
 	signer := http.Handler(&CertificateSigner{
-		LDAPHost: *ldapHost,
-		Config:   config,
+		LDAPHost:   *ldapHost,
+                LDAPBind:   ldapSearchAccount,
+                LDAPPass:   ldapSearchPassword,
+                SearchBase: kubetoken.SearchBase,
+		Config:     config,
 	})
 
 	// If Duo is enabled, redirect signcsr to a duo authenticated version
@@ -72,7 +81,10 @@ func main() {
 		r.Handle("/api/v1/signcsr", BasicAuth(signer))
 	}
 	r.Handle("/api/v1/roles", BasicAuth(&RoleHandler{
-		ldaphost: *ldapHost,
+		ldaphost:   *ldapHost,
+                ldapBind:   ldapSearchAccount,
+                ldapPass:   ldapSearchPassword,
+                searchBase: kubetoken.SearchBase,
 	}))
 	r.HandleFunc("/healthcheck", func(w http.ResponseWriter, req *http.Request) {
 		io.WriteString(w, "OK")
@@ -91,20 +103,69 @@ func main() {
 
 type CertificateSigner struct {
 	kubetoken.Signer
-	LDAPHost string
+	LDAPHost   string
+        LDAPBind   string
+        LDAPPass   string
+        SearchBase string
 	*Config
 }
 
-func userdn(user string) string {
-	return fmt.Sprintf(binddn(user), escapeDN(user))
+func userdn(ldapHost, ldapBind, ldapPass, SearchBase, user string) string {
+	return fmt.Sprintf(binddn(ldapHost, ldapBind, ldapPass, SearchBase, user), escapeDN(user))
 }
 
-func binddn(user string) string {
-	if strings.HasSuffix(user, "-bot") {
-		return "UID=%s,OU=bots," + BindDN
-	}
-        log.Println("BindDN", BindDN)
-	return "UID=%s," + BindDN
+//func binddn(user string) string {
+//	if strings.HasSuffix(user, "-bot") {
+//		return "UID=%s,OU=bots," + BindDN
+//	}
+//        log.Println("BindDN", BindDN)
+//	return "UID=%s," + BindDN
+//}
+
+func binddn(ldapHost, ldapBind, ldapPassword, SearchBase, user string) string {
+        config := tls.Config{
+                ServerName: ldapHost,
+        }
+
+        conn, err := ldap.DialTLS("tcp", fmt.Sprintf("%s:%d", ldapHost, 636), &config)
+        if err != nil {
+                  log.Println("failed dial")
+                  return "failed"
+        }
+        log.Println("after dial")
+        err = conn.Bind(ldapBind, ldapPassword) 
+        if err != nil {
+                  log.Println("failed bind")
+                  return "failed"
+        }
+        defer conn.Close()
+
+        filter := fmt.Sprintf("(&(objectClass=person)(uid=%s))", user)
+
+        log.Println(filter)
+
+        userRequest := ldap.NewSearchRequest(
+                SearchBase,
+                ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+                filter,
+                []string{"dn"},
+                nil,
+        )
+        sr, err := conn.Search(userRequest)
+        if err != nil {
+                log.Println("failed search")
+                return "failed"
+        }
+
+        bindDN := ""
+
+        log.Println(len(sr.Entries))
+        if len(sr.Entries) > 0 {
+                bindDN = sr.Entries[0].DN
+                log.Println(bindDN)
+        }
+
+        return bindDN
 }
 
 func BasicAuth(next http.Handler) http.Handler {
@@ -143,7 +204,7 @@ func (s *CertificateSigner) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 			ldapcreds := kubetoken.LDAPCreds{
 				Host:     s.LDAPHost,
 				Port:     636,
-				BindDN:   userdn(user),
+				BindDN:   userdn(s.LDAPHost, s.LDAPBind, s.LDAPPass, s.SearchBase, user),
 				Password: pass,
 			}
 			return ldapcreds.Bind()
@@ -220,7 +281,10 @@ func (s *CertificateSigner) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 }
 
 type RoleHandler struct {
-	ldaphost string
+	ldaphost   string
+        ldapBind   string
+        ldapPass   string
+        searchBase string
 }
 
 func (r *RoleHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -234,7 +298,7 @@ func (r *RoleHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		LDAPCreds: kubetoken.LDAPCreds{
 			Host:     r.ldaphost,
 			Port:     636,
-			BindDN:   userdn(user),
+			BindDN:   userdn(r.ldaphost, r.ldapBind, r.ldapPass, r.searchBase, user),
 			Password: pass,
 		},
 	}
