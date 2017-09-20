@@ -22,11 +22,10 @@ type ADRoleValidater struct {
 	Bind func() (LDAPConn, error)
 }
 
-func (r *ADRoleValidater) ValidateRoleForUser(user, role string) error {
-	roledn := fmt.Sprintf("cn=%s,%s", escapeDN(role), SearchBase)
+func (r *ADRoleValidater) ValidateRoleForUser(user, userdn, roledn string) error {
 	filter := fmt.Sprintf("(&(objectClass=person)(memberOf=%s))", roledn)
 	kubeRoles := ldap.NewSearchRequest(
-		userdn(user),
+		userdn,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		filter,
 		[]string{"uid"},
@@ -44,11 +43,11 @@ func (r *ADRoleValidater) ValidateRoleForUser(user, role string) error {
 	}
 	switch len(sr.Entries) {
 	case 0:
-		return fmt.Errorf("%s is not a member of %s", userdn(user), roledn)
+		return fmt.Errorf("%s is not a member of %s", userdn, roledn)
 	case 1:
 		usercn := sr.Entries[0].GetAttributeValue("uid")
 		if user != usercn {
-			return fmt.Errorf("%q is not a member of %q; search returned %q", user, role, usercn)
+			return fmt.Errorf("%q is not a member of %q; search returned %q", user, roledn, usercn)
 		}
 		return nil
 	default:
