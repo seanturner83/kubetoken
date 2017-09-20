@@ -17,7 +17,6 @@ import (
 	"os"
 	"regexp"
 	"sort"
-//	"strings"
 
 	"github.com/atlassian/kubetoken"
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
@@ -33,21 +32,19 @@ var BindDN = "OU=people,DC=office,DC=atlassian,DC=com"
 func main() {
 	fmt.Println(os.Args[0], "version:", kubetoken.Version)
 
-	ldapHost := kingpin.Flag("ldap", "ldap host to use (:636 assumed)").Required().String()
-	duoIKey := kingpin.Flag("duoikey", "Duo ikey value (support disabled if not set)").Default(os.Getenv("DUO_IKEY")).String()
-	duoSKey := kingpin.Flag("duoskey", "Duo skey value (support disabled if not set)").Default(os.Getenv("DUO_SKEY")).String()
-	duoAPIHost := kingpin.Flag("duoapihost", "Duo API Host (support disabled if not set)").Default(os.Getenv("DUO_API_HOST")).String()
-	configFile := kingpin.Flag("config", "path to kubetoken.json").Default("/config/kubetoken.json").String()
+	ldapHost           := kingpin.Flag("ldap", "ldap host to use (:636 assumed)").Required().String()
+	duoIKey            := kingpin.Flag("duoikey", "Duo ikey value (support disabled if not set)").Default(os.Getenv("DUO_IKEY")).String()
+	duoSKey            := kingpin.Flag("duoskey", "Duo skey value (support disabled if not set)").Default(os.Getenv("DUO_SKEY")).String()
+	duoAPIHost         := kingpin.Flag("duoapihost", "Duo API Host (support disabled if not set)").Default(os.Getenv("DUO_API_HOST")).String()
+	configFile         := kingpin.Flag("config", "path to kubetoken.json").Default("/config/kubetoken.json").String()
+        ldapSearchAccount  := kingpin.Flag("ldapsearchaccount", "LDAP search proxy account").Default(os.Getenv("LDAP_SEARCH_ACCOUNT")).String()
+        ldapSearchPassword := kingpin.Flag("ldapsearchpassword", "LDAP search account password").Default(os.Getenv("LDAP_SEARCH_PASSWORD")).String()
 	kingpin.Parse()
 
 	config, err := loadConfig(*configFile)
 	if err != nil {
 		log.Fatalf("could not load config: %v", err)
 	}
-
-        ldapSearchAccount  := "uid=sean,ou=users,o=59ae7fcf7b2adf857732e47f,dc=jumpcloud,dc=com"
-        ldapSearchPassword := "G332EDP"
-
 
 	fmt.Println(os.Args[0], "loaded config: ")
 	b, err := json.MarshalIndent(config, "", "  ")
@@ -61,8 +58,8 @@ func main() {
 	r := mux.NewRouter()
 	signer := http.Handler(&CertificateSigner{
 		LDAPHost:   *ldapHost,
-                LDAPBind:   ldapSearchAccount,
-                LDAPPass:   ldapSearchPassword,
+                LDAPBind:   *ldapSearchAccount,
+                LDAPPass:   *ldapSearchPassword,
                 SearchBase: kubetoken.SearchBase,
 		Config:     config,
 	})
@@ -82,8 +79,8 @@ func main() {
 	}
 	r.Handle("/api/v1/roles", BasicAuth(&RoleHandler{
 		ldaphost:   *ldapHost,
-                ldapBind:   ldapSearchAccount,
-                ldapPass:   ldapSearchPassword,
+                ldapBind:   *ldapSearchAccount,
+                ldapPass:   *ldapSearchPassword,
                 searchBase: kubetoken.SearchBase,
 	}))
 	r.HandleFunc("/healthcheck", func(w http.ResponseWriter, req *http.Request) {
@@ -111,18 +108,16 @@ type CertificateSigner struct {
 }
 
 func userdn(ldapHost, ldapBind, ldapPass, SearchBase, user string) string {
-	return fmt.Sprintf(binddn(ldapHost, ldapBind, ldapPass, SearchBase, user), escapeDN(user))
+        filter := fmt.Sprintf("(&(objectClass=person)(uid=%s))", escapeDN(user))
+	return fmt.Sprintf(getdn(ldapHost, ldapBind, ldapPass, SearchBase, filter))
 }
 
-//func binddn(user string) string {
-//	if strings.HasSuffix(user, "-bot") {
-//		return "UID=%s,OU=bots," + BindDN
-//	}
-//        log.Println("BindDN", BindDN)
-//	return "UID=%s," + BindDN
-//}
+func roledn(ldapHost, ldapBind, ldapPass, SearchBase, role string) string {
+        filter := fmt.Sprintf("(&(objectClass=groupOfNames)(cn=%s))", escapeDN(role))
+        return fmt.Sprintf(getdn(ldapHost, ldapBind, ldapPass, SearchBase, filter))
+}
 
-func binddn(ldapHost, ldapBind, ldapPassword, SearchBase, user string) string {
+func getdn(ldapHost, ldapBind, ldapPassword, SearchBase, filter string) string {
         config := tls.Config{
                 ServerName: ldapHost,
         }
@@ -132,7 +127,7 @@ func binddn(ldapHost, ldapBind, ldapPassword, SearchBase, user string) string {
                   log.Println("failed dial")
                   return "failed"
         }
-        log.Println("after dial")
+
         err = conn.Bind(ldapBind, ldapPassword) 
         if err != nil {
                   log.Println("failed bind")
@@ -140,9 +135,7 @@ func binddn(ldapHost, ldapBind, ldapPassword, SearchBase, user string) string {
         }
         defer conn.Close()
 
-        filter := fmt.Sprintf("(&(objectClass=person)(uid=%s))", user)
-
-        log.Println(filter)
+//        log.Println(filter)
 
         userRequest := ldap.NewSearchRequest(
                 SearchBase,
@@ -159,7 +152,6 @@ func binddn(ldapHost, ldapBind, ldapPassword, SearchBase, user string) string {
 
         bindDN := ""
 
-        log.Println(len(sr.Entries))
         if len(sr.Entries) > 0 {
                 bindDN = sr.Entries[0].DN
                 log.Println(bindDN)
@@ -211,7 +203,7 @@ func (s *CertificateSigner) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 		},
 	}
 
-	if err := ad.ValidateRoleForUser(user, role); err != nil {
+	if err := ad.ValidateRoleForUser(user, userdn(s.LDAPHost, s.LDAPBind, s.LDAPPass, s.SearchBase, user), roledn(s.LDAPHost, s.LDAPBind, s.LDAPPass, s.SearchBase, role)); err != nil {
 		http.Error(w, err.Error(), 403)
 		return
 	}
@@ -303,7 +295,7 @@ func (r *RoleHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		},
 	}
 
-	roles, err := ad.FetchRolesForUser(user)
+	roles, err := ad.FetchRolesForUser(userdn(r.ldaphost, r.ldapBind, r.ldapPass, r.searchBase, user))
 	if err != nil {
 		http.Error(w, err.Error(), 403)
 		return
