@@ -28,7 +28,7 @@ func (r *ADRoleValidater) ValidateRoleForUser(user, userdn, roledn string) error
 		userdn,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		filter,
-		[]string{"uid"},
+		[]string{"samaccountname"},
 		nil,
 	)
 	conn, err := r.Bind()
@@ -45,7 +45,7 @@ func (r *ADRoleValidater) ValidateRoleForUser(user, userdn, roledn string) error
 	case 0:
 		return fmt.Errorf("%s is not a member of %s", userdn, roledn)
 	case 1:
-		usercn := sr.Entries[0].GetAttributeValue("uid")
+		usercn := sr.Entries[0].GetAttributeValue("sAMAccountName")
 		if user != usercn {
 			return fmt.Errorf("%q is not a member of %q; search returned %q", user, roledn, usercn)
 		}
