@@ -26,9 +26,6 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// this value can be overwritten by -ldflags="-X main.BindDN=$BIND_DN"
-// var BindDN = "OU=people,DC=office,DC=atlassian,DC=com"
-
 func main() {
 	fmt.Println(os.Args[0], "version:", kubetoken.Version)
 
@@ -134,8 +131,6 @@ func getdn(ldapHost, ldapBind, ldapPassword, SearchBase, filter string) string {
                   return "failed"
         }
         defer conn.Close()
-
-//        log.Println(filter)
 
         userRequest := ldap.NewSearchRequest(
                 SearchBase,
@@ -281,8 +276,8 @@ type RoleHandler struct {
 
 func (r *RoleHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	user, pass, ok := req.BasicAuth()
-log.Printf ("login as %s, %s", user, pass)
-log.Printf ("binding as %s, %s, %s, searching %s", r.ldaphost, r.ldapBind, r.ldapPass, r.searchBase)
+log.Printf ("login as %s", user)
+log.Printf ("binding as %s, %s, searching %s", r.ldaphost, r.ldapBind, r.searchBase)
 	if !ok {
 		http.Error(w, "Forbidden", 403)
 		return
