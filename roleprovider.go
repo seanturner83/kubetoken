@@ -22,10 +22,10 @@ func fetchRolesForUser(creds *LDAPCreds, userdn string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
-
+	//defer conn.Close()
+log.Println("bound")
 	// find all the kube- roles
-	filter := fmt.Sprintf("(&(objectClass=groupOfNames)(member=%s))", userdn)
+	filter := fmt.Sprintf("(&(objectClass=group)(member=%s))", userdn)
 
 	kubeRoles := ldap.NewSearchRequest(
 		SearchBase,

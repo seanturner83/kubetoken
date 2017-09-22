@@ -27,7 +27,7 @@ import (
 )
 
 // this value can be overwritten by -ldflags="-X main.BindDN=$BIND_DN"
-var BindDN = "OU=people,DC=office,DC=atlassian,DC=com"
+// var BindDN = "OU=people,DC=office,DC=atlassian,DC=com"
 
 func main() {
 	fmt.Println(os.Args[0], "version:", kubetoken.Version)
@@ -108,12 +108,12 @@ type CertificateSigner struct {
 }
 
 func userdn(ldapHost, ldapBind, ldapPass, SearchBase, user string) string {
-        filter := fmt.Sprintf("(&(objectClass=person)(uid=%s))", escapeDN(user))
+        filter := fmt.Sprintf("(&(objectClass=person)(samaccountname=%s))", escapeDN(user))
 	return fmt.Sprintf(getdn(ldapHost, ldapBind, ldapPass, SearchBase, filter))
 }
 
 func roledn(ldapHost, ldapBind, ldapPass, SearchBase, role string) string {
-        filter := fmt.Sprintf("(&(objectClass=groupOfNames)(cn=%s))", escapeDN(role))
+        filter := fmt.Sprintf("(&(objectClass=group)(cn=%s))", escapeDN(role))
         return fmt.Sprintf(getdn(ldapHost, ldapBind, ldapPass, SearchBase, filter))
 }
 
@@ -281,6 +281,8 @@ type RoleHandler struct {
 
 func (r *RoleHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	user, pass, ok := req.BasicAuth()
+log.Printf ("login as %s, %s", user, pass)
+log.Printf ("binding as %s, %s, %s, searching %s", r.ldaphost, r.ldapBind, r.ldapPass, r.searchBase)
 	if !ok {
 		http.Error(w, "Forbidden", 403)
 		return
@@ -294,7 +296,7 @@ func (r *RoleHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			Password: pass,
 		},
 	}
-
+log.Println ("fetching roles")
 	roles, err := ad.FetchRolesForUser(userdn(r.ldaphost, r.ldapBind, r.ldapPass, r.searchBase, user))
 	if err != nil {
 		http.Error(w, err.Error(), 403)
