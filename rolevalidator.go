@@ -23,7 +23,7 @@ type ADRoleValidater struct {
 }
 
 func (r *ADRoleValidater) ValidateRoleForUser(user, userdn, roledn string) error {
-	filter := fmt.Sprintf("(&(objectClass=person)(memberOf=%s))", roledn)
+	filter := fmt.Sprintf("(&(objectClass=person)(memberOf:1.2.840.113556.1.4.1941:=%s))", roledn)
 	kubeRoles := ldap.NewSearchRequest(
 		userdn,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,

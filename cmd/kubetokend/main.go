@@ -15,7 +15,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"regexp"
+//	"regexp"
 	"sort"
 
 	"github.com/atlassian/kubetoken"
@@ -324,34 +324,45 @@ func readCSR(r io.Reader) (*x509.CertificateRequest, error) {
 }
 
 func parseCustomerNamespaceEnvFromRole(role string) (string, string, string, error) {
-	re, err := regexp.Compile(`^kube-(?P<customer>\w+)-(?P<ns>\w+)-(?P<env>\w+)-dl-`)
-	if err != nil {
-		return "", "", "", err
-	}
-	m := re.FindStringSubmatch(role)
-	if len(m) != 4 {
-		return "", "", "", fmt.Errorf("no match for role %q", role)
-	}
-	var customer, ns, env string
-	for i, name := range re.SubexpNames() {
-		switch name {
-		case "customer":
-			customer = m[i]
-		case "ns":
-			ns = m[i]
-		case "env":
-			env = m[i]
-		}
-	}
-	if customer == "" {
-		return "", "", "", fmt.Errorf("customer not found in role %q", role)
-	}
-	if ns == "" {
-		return "", "", "", fmt.Errorf("namespace not found in role %q", role)
-	}
-	if env == "" {
-		return "", "", "", fmt.Errorf("environment not found in role %q", role)
-	}
+//	re, err := regexp.Compile(`^kube-(?P<customer>\w+)-(?P<ns>\w+)-(?P<env>\w+)-dl-`)
+//	if err != nil {
+//		return "", "", "", err
+//	}
+//	m := re.FindStringSubmatch(role)
+//	if len(m) != 4 {
+//		return "", "", "", fmt.Errorf("no match for role %q", role)
+//	}
+//	var customer, ns, env string
+//	for i, name := range re.SubexpNames() {
+//		switch name {
+//		case "customer":
+//			customer = m[i]
+//		case "ns":
+//			ns = m[i]
+//		case "env":
+//			env = m[i]
+//		}
+//	}
+//	if customer == "" {
+//		return "", "", "", fmt.Errorf("customer not found in role %q", role)
+//	}
+//	if ns == "" {
+//		return "", "", "", fmt.Errorf("namespace not found in role %q", role)
+//	}
+//	if env == "" {
+//		return "", "", "", fmt.Errorf("environment not found in role %q", role)
+//	}
+        customer := ""
+        ns := ""
+        env := ""
+        if role == "FON_EXT_CAMELOT_Platform" {
+                customer = "Loro"
+                ns       = "Default"
+                env      = "Infra2"
+        } else {
+                return "", "", "", fmt.Errorf("no mapping for role %q", role)
+        }
+
 	return customer, ns, env, nil
 }
 

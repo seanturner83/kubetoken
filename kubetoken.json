@@ -1,8 +1,8 @@
 {
        "environments": [
           {
-             "customer": "kitt",
-             "env": "dev",
+             "customer": "Loro",
+             "env": "Infra2",
              "contexts": [
                 {
                    "clusters": {
