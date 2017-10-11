@@ -1,11 +1,13 @@
 package main
 
 import (
-	"crypto/x509"
+//	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
+//	"encoding/pem"
 	"io/ioutil"
 	"os"
+        "strings"
+        "unicode"
 
 	"github.com/atlassian/kubetoken"
 	"github.com/pkg/errors"
@@ -15,11 +17,14 @@ type Environment struct {
 	Name        string `json:"name"`
 	Customer    string `json:"customer"`
 	Environment string `json:"env"`
-	caCertPEM   []byte // contents of the CAcert file, as PEM.
+//	caCertPEM   []byte // contents of the CAcert file, as PEM.
 	Contexts    []struct {
-		CACert           string            `json:"cacert"`  // path to ca cert
-		PrivKey          string            `json:"privkey"` // path to ca cert private key
-		caCertPEM        []byte            // contents of the CAcert file, as PEM.
+//		CACert           string            `json:"cacert"`  // path to ca cert
+//		PrivKey          string            `json:"privkey"` // path to ca cert private key
+//		caCertPEM        []byte            // contents of the CAcert file, as PEM.
+                VaultHost        string            `json:"vaulthost"` // vault host to use
+                VaultTokenFile   string            `json:"vaulttoken"` // path to vault token
+                VaultToken       string            // the actual vault token, read in from secret file
 		Clusters         map[string]string `json:"clusters"`
 		kubetoken.Signer `json:"-"`
 	} `json:"contexts"`
@@ -44,39 +49,28 @@ func loadConfig(p string) (*Config, error) {
 	return &config, nil
 }
 
-func loadCertificates(c *Config) error {
+func loadTokens(c *Config) error {
 	for i := range c.Environments {
 		e := &c.Environments[i]
 		for j := range e.Contexts {
 			ctx := &e.Contexts[j]
-			caCertPEM, err := ioutil.ReadFile(ctx.CACert)
+			VaultToken, err := ioutil.ReadFile(ctx.VaultTokenFile)
+                        ctx.VaultToken = stripSpaces(string(VaultToken))
 			if err != nil {
-				return errors.WithMessage(err, ctx.CACert)
+				return errors.WithMessage(err, ctx.VaultTokenFile)
 			}
-			privKeyPEM, err := ioutil.ReadFile(ctx.PrivKey)
-			if err != nil {
-				return errors.WithMessage(err, ctx.PrivKey)
-			}
+                }
+        }
+        return nil
+}
 
-			block, _ := pem.Decode(caCertPEM)
-			if block == nil {
-				return errors.Errorf("%v: pem decode caCertPEM failed", ctx.CACert)
-			}
-			ctx.Signer.Cert, err = x509.ParseCertificate(block.Bytes)
-			ctx.caCertPEM = caCertPEM
-			if err != nil {
-				return err
-			}
-
-			block, _ = pem.Decode(privKeyPEM)
-			if block == nil {
-				return errors.Errorf("%v: pem decode privKeyPEM failed", ctx.PrivKey)
-			}
-			ctx.Signer.PrivKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+func stripSpaces(str string) string {
+    return strings.Map(func(r rune) rune {
+        if unicode.IsSpace(r) {
+            // if the character is a space, drop it
+            return -1
+        }
+        // else keep it in the string
+        return r
+    }, str)
 }

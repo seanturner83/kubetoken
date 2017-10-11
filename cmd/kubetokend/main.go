@@ -24,6 +24,8 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+
+        vaultapi "github.com/hashicorp/vault/api"
 )
 
 func main() {
@@ -48,8 +50,8 @@ func main() {
 	check(err)
 	fmt.Printf("%s\n", b)
 
-	if err := loadCertificates(config); err != nil {
-		log.Fatalf("could not load certificates: %v", err)
+	if err := loadTokens(config); err != nil {
+		 log.Fatalf("could not load vault tokens: %v", err)
 	}
 
 	r := mux.NewRouter()
@@ -223,11 +225,11 @@ func (s *CertificateSigner) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	certPEM, err := env.Contexts[0].Sign(csr)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
+//	certPEM, err := env.Contexts[0].Sign(csr)
+//	if err != nil {
+//		http.Error(w, err.Error(), 500)
+//		return
+//	}
 
 	// to support older clients, we push the cluster addresses from the
 	// first context.
@@ -239,24 +241,73 @@ func (s *CertificateSigner) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 	// sort lexically in the hope that cell-0 comes before cell-1, etc.
 	sort.Stable(sort.StringSlice(addresses))
 
-	var contexts []kubetoken.Context
+//	var contexts []kubetoken.Context
+//	for _, c := range env.Contexts {
+//		contexts = append(contexts, kubetoken.Context{
+//			Files: map[string][]byte{
+//				"ca.pem":                    c.caCertPEM,
+//				fmt.Sprintf("%s.pem", user): certPEM,
+//			},
+//			Clusters: c.Clusters,
+//		})
+//	}
+
+
+        os.Setenv("VAULT_ADDR", env.Contexts[0].VaultHost)
+
+        client, err := vaultapi.NewClient(vaultapi.DefaultConfig())
+
+        if err != nil {
+                log.Println(err)
+                return
+        }
+
+        token := env.Contexts[0].VaultToken
+
+        client.SetToken(token)
+
+        c := client.Logical()
+
+        csrPem := pem.EncodeToMemory(&pem.Block{
+		Type: "CERTIFICATE REQUEST", Bytes: csr.Raw,
+	})
+
+        log.Println(string(csrPem))
+
+        resp, err := c.Write("k8s-ca/sign-verbatim",
+        map [string]interface{}{
+                        "csr" : string(csrPem),
+        })
+
+        if err != nil {
+                log.Println(err)
+                return
+        }
+
+        log.Println(resp)
+
+        capem   := []byte(resp.Data["issuing_ca"].(string))
+        certpem := []byte(resp.Data["certificate"].(string))
+
+        var contexts []kubetoken.Context
 	for _, c := range env.Contexts {
 		contexts = append(contexts, kubetoken.Context{
 			Files: map[string][]byte{
-				"ca.pem":                    c.caCertPEM,
-				fmt.Sprintf("%s.pem", user): certPEM,
+				"ca.pem":                    capem,
+				fmt.Sprintf("%s.pem", user): certpem,
 			},
 			Clusters: c.Clusters,
 		})
 	}
 
-	enc := json.NewEncoder(w)
+        enc := json.NewEncoder(w)
+
 	enc.Encode(kubetoken.CertificateResponse{
 		Username: user,
 		Role:     csr.Subject.Organization[0],
 		Files: map[string][]byte{
-			"ca.pem":                    env.Contexts[0].caCertPEM,
-			fmt.Sprintf("%s.pem", user): certPEM,
+			"ca.pem":                    capem,
+			fmt.Sprintf("%s.pem", user): certpem,
 		},
 		Customer:    env.Customer,
 		Addresses:   addresses,
@@ -264,6 +315,7 @@ func (s *CertificateSigner) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 		Namespace:   ns,
 		Contexts:    contexts,
 	})
+
 	log.Printf("authorised %v to assume role %v", csr.Subject.CommonName, csr.Subject.Organization[0])
 }
 
