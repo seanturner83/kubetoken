@@ -38,6 +38,8 @@ func main() {
 	configFile         := kingpin.Flag("config", "path to kubetoken.json").Default("/config/kubetoken.json").String()
         ldapSearchAccount  := kingpin.Flag("ldapsearchaccount", "LDAP search proxy account").Default(os.Getenv("LDAP_SEARCH_ACCOUNT")).String()
         ldapSearchPassword := kingpin.Flag("ldapsearchpassword", "LDAP search account password").Default(os.Getenv("LDAP_SEARCH_PASSWORD")).String()
+        httpsCertPath      := kingpin.Flag("httpscertpath", "where to find HTTPS certificates for kubetokend TLS").Default(os.Getenv("HTTPS_CERT_PATH")).String()
+        httpsCertName      := kingpin.Flag("httpscertname", "name of cert and key - file extensions assumed as .crt and .key").Default(os.Getenv("HTTPS_CERT_NAME")).String()
 	kingpin.Parse()
 
 	config, err := loadConfig(*configFile)
@@ -94,7 +96,41 @@ func main() {
 	addr := fmt.Sprintf(":%s", os.Getenv("PORT"))
 	log.Println("listening on", addr)
 
-	http.ListenAndServe(addr, loggedRouter)
+        if *httpsCertPath != "" {
+                log.Println("using TLS certs from", *httpsCertPath)
+                cfg := &tls.Config{
+                        MinVersion:               tls.VersionTLS12,
+                        CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+                        PreferServerCipherSuites: true,
+                        CipherSuites: []uint16{
+                                tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+                                tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+                                tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+                                tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+                        },
+                }
+                srv := &http.Server{
+                        Addr:         addr,
+                        Handler:      loggedRouter,
+                        TLSConfig:    cfg,
+                        TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),
+                }
+
+                var tlscert, tlskey string
+
+                if *httpsCertName != "" {
+                        log.Println("using named cert / key, instead of kubetokend.crt/key")
+                        tlscert = fmt.Sprintf("%s/%s.crt", *httpsCertPath, *httpsCertName)
+                        tlskey  = fmt.Sprintf("%s/%s.key", *httpsCertPath, *httpsCertName)
+                } else {
+                        tlscert = fmt.Sprintf("%s/kubetokend.crt", *httpsCertPath)
+                        tlskey  = fmt.Sprintf("%s/kubetokend.key", *httpsCertPath)
+                }
+        
+                srv.ListenAndServeTLS(tlscert, tlskey)
+        } else {
+	        http.ListenAndServe(addr, loggedRouter)
+        }
 }
 
 type CertificateSigner struct {
