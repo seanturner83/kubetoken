@@ -11,8 +11,6 @@ RUN go build -x -ldflags="-X github.com/atlassian/kubetoken.Version=1234 -X main
 
 FROM ubuntu:16.04
 RUN apt-get update && apt-get install ca-certificates -y
-COPY loro1.crt /usr/local/share/ca-certificates/
-COPY loro2.crt /usr/local/share/ca-certificates/
 RUN update-ca-certificates
 COPY --from=builder /go/src/github.com/atlassian/kubetoken/kubetokend /bin/kubetokend
 COPY --from=builder /go/src/github.com/atlassian/kubetoken/kubetoken /bin/kubetoken
