@@ -1,0 +1,17 @@
+{
+       "environments": [
+          {
+             "customer": "vanti",
+             "env": "vandvc1",
+             "contexts": [
+                {
+                   "clusters": {
+                      "cell-0": "https://api.vanti.me:6443"
+                   },
+                   "vaulthost": "https://vault.vanti.me:8200",
+                   "vaulttoken": "/vaultoken/token"
+                }
+             ]
+          }
+       ]
+}

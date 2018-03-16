@@ -2,6 +2,7 @@ package kubetoken
 
 import (
 	"fmt"
+	"strings"
 
 	ldap "gopkg.in/ldap.v2"
 )
@@ -46,7 +47,7 @@ func (r *ADRoleValidater) ValidateRoleForUser(user, userdn, roledn string) error
 		return fmt.Errorf("%s is not a member of %s", userdn, roledn)
 	case 1:
 		usercn := sr.Entries[0].GetAttributeValue("sAMAccountName")
-		if user != usercn {
+		if strings.ToLower(user) != strings.ToLower(usercn) {
 			return fmt.Errorf("%q is not a member of %q; search returned %q", user, roledn, usercn)
 		}
 		return nil

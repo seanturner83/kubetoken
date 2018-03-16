@@ -1,19 +1,17 @@
 {
        "environments": [
           {
-             "customer": "Loro",
-             "env": "Infra2",
+             "customer": "Vanti",
+             "env": "vandvc1",
              "contexts": [
                 {
                    "clusters": {
-                      "cell-0": "https://kubernetes.cell-0.example.com",
-                      "cell-1": "https://kubernetes.cell-1.example.com",
-                      "cell-2": "https://kubernetes.cell-2.example.com"
+                      "cell-0": "https://api.vanti.me"
                    },
-                   "vaulthost": "http://192.168.65.2:8200",
-                   "vaulttoken": "/ssl/example/vaulttoken"
+                   "vaulthost": "http://vault.vanti.me:8200",
+                   "vaulttoken": "/vaulttoken/token"
                 }
              ]
           }
        ]
-    }
+}

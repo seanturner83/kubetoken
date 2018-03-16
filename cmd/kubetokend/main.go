@@ -15,7 +15,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-//	"regexp"
+	"regexp"
 	"sort"
 
 	"github.com/atlassian/kubetoken"
@@ -126,7 +126,7 @@ func main() {
                         tlscert = fmt.Sprintf("%s/kubetokend.crt", *httpsCertPath)
                         tlskey  = fmt.Sprintf("%s/kubetokend.key", *httpsCertPath)
                 }
-        
+
                 srv.ListenAndServeTLS(tlscert, tlskey)
         } else {
 	        http.ListenAndServe(addr, loggedRouter)
@@ -163,7 +163,7 @@ func getdn(ldapHost, ldapBind, ldapPassword, SearchBase, filter string) string {
                   return "failed"
         }
 
-        err = conn.Bind(ldapBind, ldapPassword) 
+        err = conn.Bind(ldapBind, ldapPassword)
         if err != nil {
                   log.Println("failed bind")
                   return "failed"
@@ -310,7 +310,7 @@ func (s *CertificateSigner) ServeHTTP(w http.ResponseWriter, req *http.Request) 
 
         log.Println(string(csrPem))
 
-        resp, err := c.Write("k8s-ca/sign-verbatim",
+        resp, err := c.Write("vandvc1/pki/k8s/sign-verbatim/admin",
         map [string]interface{}{
                         "csr" : string(csrPem),
         })
@@ -412,44 +412,44 @@ func readCSR(r io.Reader) (*x509.CertificateRequest, error) {
 }
 
 func parseCustomerNamespaceEnvFromRole(role string) (string, string, string, error) {
-//	re, err := regexp.Compile(`^kube-(?P<customer>\w+)-(?P<ns>\w+)-(?P<env>\w+)-dl-`)
-//	if err != nil {
-//		return "", "", "", err
-//	}
-//	m := re.FindStringSubmatch(role)
-//	if len(m) != 4 {
-//		return "", "", "", fmt.Errorf("no match for role %q", role)
-//	}
-//	var customer, ns, env string
-//	for i, name := range re.SubexpNames() {
-//		switch name {
-//		case "customer":
-//			customer = m[i]
-//		case "ns":
-//			ns = m[i]
-//		case "env":
-//			env = m[i]
-//		}
-//	}
-//	if customer == "" {
-//		return "", "", "", fmt.Errorf("customer not found in role %q", role)
-//	}
-//	if ns == "" {
-//		return "", "", "", fmt.Errorf("namespace not found in role %q", role)
-//	}
-//	if env == "" {
-//		return "", "", "", fmt.Errorf("environment not found in role %q", role)
-//	}
-        customer := ""
-        ns := ""
-        env := ""
-        if role == "FON_EXT_CAMELOT_Platform" {
-                customer = "Loro"
-                ns       = "Default"
-                env      = "Infra2"
-        } else {
-                return "", "", "", fmt.Errorf("no mapping for role %q", role)
-        }
+	re, err := regexp.Compile(`^kube-(?P<customer>\w+)-(?P<ns>\w+)-(?P<env>\w+)`)
+	if err != nil {
+		return "", "", "", err
+	}
+	m := re.FindStringSubmatch(role)
+	if len(m) != 4 {
+		return "", "", "", fmt.Errorf("no match for role %q", role)
+	}
+	var customer, ns, env string
+	for i, name := range re.SubexpNames() {
+		switch name {
+		case "customer":
+			customer = m[i]
+		case "ns":
+			ns = m[i]
+		case "env":
+			env = m[i]
+		}
+	}
+	if customer == "" {
+		return "", "", "", fmt.Errorf("customer not found in role %q", role)
+	}
+	if ns == "" {
+		return "", "", "", fmt.Errorf("namespace not found in role %q", role)
+	}
+	if env == "" {
+		return "", "", "", fmt.Errorf("environment not found in role %q", role)
+	}
+//        customer := ""
+//        ns := ""
+//        env := ""
+//        if role == "Jenkins Administrators" {
+//                customer = "Vanti"
+//                ns       = "vanti"
+//                env      = "vandvc1"
+//        } else {
+//                return "", "", "", fmt.Errorf("no mapping for role %q", role)
+//        }
 
 	return customer, ns, env, nil
 }
